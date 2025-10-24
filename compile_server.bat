@@ -1,0 +1,1 @@
+/gbdk/bin/lcc -o server.gb server.c

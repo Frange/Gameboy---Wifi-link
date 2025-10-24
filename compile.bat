@@ -1,0 +1,1 @@
+/gbdk/bin/lcc -o game.gb main.c

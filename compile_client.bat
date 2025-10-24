@@ -1,0 +1,1 @@
+/gbdk/bin/lcc -o client.gb client.c
