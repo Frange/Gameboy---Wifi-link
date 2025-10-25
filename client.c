@@ -59,27 +59,27 @@ const char* get_button_name(uint8_t btn) {
 void show_title_screen(void) {
     clear_screen();
     
-    set_cursor(0, 3);
+    set_cursor(0, 2);
     printf("####################");
+    set_cursor(0, 3);
+    printf("#                  #");
     set_cursor(0, 4);
-    printf("#                  #");
-    set_cursor(0, 5);
     printf("#   GB LINK WIFI   #");
+    set_cursor(0, 5);
+    printf("#                  #");
     set_cursor(0, 6);
-    printf("#                  #");
-    set_cursor(0, 7);
     printf("#      CLIENT      #");
-    set_cursor(0, 8);
+    set_cursor(0, 7);
     printf("#                  #");
-    set_cursor(0, 9);
+    set_cursor(0, 8);
     printf("####################");
     
-    set_cursor(3, 12);
+    set_cursor(4, 11);
     printf("Press START");
     
-    set_cursor(1, 16);
+    set_cursor(1, 15);
     printf("Created by Frange");
-    set_cursor(7, 17);
+    set_cursor(8, 16);
     printf("2025");
     
     // Esperar a que no haya botones presionados
@@ -101,14 +101,14 @@ void show_title_screen(void) {
 void update_header(void) {
     set_cursor(0, 0);
     if (connected) {
-        printf("SERVER CONNECTED    ");
+        printf("CLIENT - CONNECTED    ");
     } else {
-        printf("SERVER NOT CONNECTED");
+        printf("CLIENT NOT CONNECTED");
     }
     
     set_cursor(0, 1);
     if (connected) {
-        printf("Peer: CLIENT        ");
+        printf("Peer: SERVER        ");
     } else {
         printf("Peer: NONE          ");
     }
@@ -237,7 +237,7 @@ void process_message(uint8_t msg) {
     
     switch (msg) {
         case MSG_DISCOVERY:
-            add_log("RX DISCOVERY");
+            add_log("  RX DISCOVERY");
             connected = 1;
             delay(50);
             last_sent = MSG_ACK;
@@ -246,54 +246,54 @@ void process_message(uint8_t msg) {
             break;
             
         case MSG_ACK:
-            add_log("RX ACK");
+            add_log("  RX ACK");
             connected = 1;
             break;
             
         case MSG_BUTTON_A:
-            add_log("RX Button A");
+            add_log("  RX Button A");
             last_button_rx = MSG_BUTTON_A;
             connected = 1;
             break;
             
         case MSG_BUTTON_B:
-            add_log("RX Button B");
+            add_log("  RX Button B");
             last_button_rx = MSG_BUTTON_B;
             connected = 1;
             break;
             
         case MSG_BUTTON_UP:
-            add_log("RX Button UP");
+            add_log("  RX Button UP");
             last_button_rx = MSG_BUTTON_UP;
             connected = 1;
             break;
             
         case MSG_BUTTON_DOWN:
-            add_log("RX Button DOWN");
+            add_log("  RX Button DOWN");
             last_button_rx = MSG_BUTTON_DOWN;
             connected = 1;
             break;
             
         case MSG_BUTTON_LEFT:
-            add_log("RX Button LEFT");
+            add_log("  RX Button LEFT");
             last_button_rx = MSG_BUTTON_LEFT;
             connected = 1;
             break;
             
         case MSG_BUTTON_RIGHT:
-            add_log("RX Button RIGHT");
+            add_log("  RX Button RIGHT");
             last_button_rx = MSG_BUTTON_RIGHT;
             connected = 1;
             break;
             
         case MSG_BUTTON_SELECT:
-            add_log("RX Button SELECT");
+            add_log("  RX Button SELECT");
             last_button_rx = MSG_BUTTON_SELECT;
             connected = 1;
             break;
             
         case MSG_PING:
-            add_log("RX PING");
+            add_log("  RX PING");
             last_sent = MSG_PONG;
             link_send(MSG_PONG);
             add_log("TX PONG");
@@ -301,12 +301,12 @@ void process_message(uint8_t msg) {
             break;
             
         case MSG_PONG:
-            add_log("RX PONG");
+            add_log("  RX PONG");
             connected = 1;
             break;
             
         default:
-            add_log("RX UNKNOWN");
+            add_log("  RX UNKNOWN");
             connected = 1;
             break;
     }
@@ -340,7 +340,7 @@ void main_loop(void) {
     uint16_t start_lock = 0;
     
     init_screen();
-    add_log("SERVER INIT");
+    add_log("CLIENT INIT");
     add_log("Searching...");
     
     in_main_screen = 1;
