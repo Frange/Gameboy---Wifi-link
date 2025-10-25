@@ -3,12 +3,15 @@
 #include <stdio.h>
 #include <string.h>
 
-#define ROLE_SERVER 1
-
 #define MSG_DISCOVERY 0xD0
 #define MSG_ACK       0xA0
 #define MSG_BUTTON_A  0xA1
 #define MSG_BUTTON_B  0xB2
+#define MSG_BUTTON_UP 0xA3
+#define MSG_BUTTON_DOWN 0xA4
+#define MSG_BUTTON_LEFT 0xA5
+#define MSG_BUTTON_RIGHT 0xA6
+#define MSG_BUTTON_SELECT 0xA7
 #define MSG_PING      0xF0
 #define MSG_PONG      0xF1
 
@@ -16,8 +19,12 @@ uint8_t connected = 0;
 uint8_t last_sent = 0x00;
 uint8_t last_received = 0x00;
 uint16_t ping_counter = 0;
+uint16_t no_response_counter = 0;
+uint8_t last_button_tx = 0;
+uint8_t last_button_rx = 0;
+uint8_t in_main_screen = 0;
 
-#define LOG_SIZE 12
+#define LOG_SIZE 11
 char log_buffer[LOG_SIZE][21];
 uint8_t log_index = 0;
 
@@ -29,75 +36,128 @@ void clear_line(uint8_t y) {
     printf("                    ");
 }
 
-const char* get_msg_name(uint8_t msg) {
-    switch(msg) {
-        case MSG_DISCOVERY: return "DISCOVERY";
-        case MSG_ACK:       return "ACK";
-        case MSG_BUTTON_A:  return "Button A";
-        case MSG_BUTTON_B:  return "Button B";
-        case MSG_PING:      return "PING";
-        case MSG_PONG:      return "PONG";
-        default:            return "";
+void clear_screen(void) {
+    for (uint8_t y = 0; y < 18; y++) {
+        clear_line(y);
     }
 }
 
-// ===== PANTALLA FIJA =====
-void update_header(void) {
-    // FILA 0: Rol y estado
-    set_cursor(0, 0);
-    printf("SERVIDOR ");
-    if (connected) {
-        printf("OK  ");
-    } else {
-        printf("OFF ");
+const char* get_button_name(uint8_t btn) {
+    switch(btn) {
+        case MSG_BUTTON_A: return "A";
+        case MSG_BUTTON_B: return "B";
+        case MSG_BUTTON_UP: return "UP";
+        case MSG_BUTTON_DOWN: return "DOWN";
+        case MSG_BUTTON_LEFT: return "LEFT";
+        case MSG_BUTTON_RIGHT: return "RIGHT";
+        case MSG_BUTTON_SELECT: return "SELECT";
+        default: return "";
+    }
+}
+
+// ===== PANTALLA DE INICIO =====
+void show_title_screen(void) {
+    clear_screen();
+    
+    set_cursor(0, 3);
+    printf("####################");
+    set_cursor(0, 4);
+    printf("#                  #");
+    set_cursor(0, 5);
+    printf("#   GB LINK WIFI   #");
+    set_cursor(0, 6);
+    printf("#                  #");
+    set_cursor(0, 7);
+    printf("#      SERVER      #");
+    set_cursor(0, 8);
+    printf("#                  #");
+    set_cursor(0, 9);
+    printf("####################");
+    
+    set_cursor(3, 12);
+    printf("Press START");
+    
+    set_cursor(1, 16);
+    printf("Created by Frange");
+    set_cursor(7, 17);
+    printf("2025");
+    
+    // Esperar a que no haya botones presionados
+    while (joypad() != 0) {
+        wait_vbl_done();
     }
     
-    // FILA 1: IP/ID del peer (no aplica en GB, mostrar estado)
+    // Esperar START
+    while (1) {
+        wait_vbl_done();
+        if (joypad() & J_START) {
+            delay(300);
+            break;
+        }
+    }
+}
+
+// ===== PANTALLA PRINCIPAL =====
+void update_header(void) {
+    set_cursor(0, 0);
+    if (connected) {
+        printf("SERVER CONNECTED    ");
+    } else {
+        printf("SERVER NOT CONNECTED");
+    }
+    
     set_cursor(0, 1);
     if (connected) {
-        printf("Peer: CONNECTED     ");
+        printf("Peer: CLIENT        ");
     } else {
-        printf("Peer: -             ");
+        printf("Peer: NONE          ");
     }
     
-    // FILA 2: TX
     set_cursor(0, 2);
     if (last_sent == 0x00) {
         printf("TX: NO DATA         ");
     } else {
-        const char* name = get_msg_name(last_sent);
-        if (strlen(name) > 0) {
-            printf("TX: 0x%02X - %-8s", last_sent, name);
+        printf("TX: 0x%02X           ", last_sent);
+    }
+    
+    set_cursor(0, 3);
+    if (last_button_tx == 0) {
+        printf("   Button:          ");
+    } else {
+        const char* btn = get_button_name(last_button_tx);
+        if (strlen(btn) > 0) {
+            printf("   Button: %-8s ", btn);
         } else {
-            printf("TX: 0x%02X          ", last_sent);
+            printf("   Button:          ");
         }
     }
     
-    // FILA 3: RX
-    set_cursor(0, 3);
+    set_cursor(0, 4);
     if (last_received == 0x00) {
         printf("RX: NO DATA         ");
     } else {
-        const char* name = get_msg_name(last_received);
-        if (strlen(name) > 0) {
-            printf("RX: 0x%02X - %-8s", last_received, name);
+        printf("RX: 0x%02X           ", last_received);
+    }
+    
+    set_cursor(0, 5);
+    if (last_button_rx == 0) {
+        printf("   Button:          ");
+    } else {
+        const char* btn = get_button_name(last_button_rx);
+        if (strlen(btn) > 0) {
+            printf("   Button: %-8s ", btn);
         } else {
-            printf("RX: 0x%02X          ", last_received);
+            printf("   Button:          ");
         }
     }
     
-    // FILA 4: Separador
-    set_cursor(0, 4);
+    set_cursor(0, 6);
     printf("--------------------");
 }
 
 void init_screen(void) {
-    // Limpiar pantalla
-    for (uint8_t y = 0; y < 18; y++) {
-        clear_line(y);
-    }
+    clear_screen();
     
-    // Inicializar log
     for (uint8_t i = 0; i < LOG_SIZE; i++) {
         log_buffer[i][0] = '\0';
     }
@@ -114,13 +174,17 @@ void add_log(const char* msg) {
     log_buffer[log_index][len] = '\0';
     log_index = (log_index + 1) % LOG_SIZE;
     
-    // Redibujar log (desde fila 5)
     for (uint8_t i = 0; i < LOG_SIZE; i++) {
         uint8_t idx = (log_index + i) % LOG_SIZE;
-        set_cursor(0, 5 + i);
+        set_cursor(0, 7 + i);
         
         if (log_buffer[idx][0] != '\0') {
-            printf("%-20s", log_buffer[idx]);
+            for (uint8_t c = 0; c < 20 && log_buffer[idx][c] != '\0'; c++) {
+                printf("%c", log_buffer[idx][c]);
+            }
+            for (uint8_t c = strlen(log_buffer[idx]); c < 20; c++) {
+                printf(" ");
+            }
         } else {
             printf("                    ");
         }
@@ -130,14 +194,12 @@ void add_log(const char* msg) {
 // ===== LINK CABLE =====
 void init_link(void) {
     SB_REG = 0x00;
-    SC_REG = 0x80;  // Master mode
+    SC_REG = 0x80;
 }
 
 uint8_t link_send(uint8_t data) {
     SB_REG = data;
     SC_REG = 0x81;
-    
-    last_sent = data;
     
     uint16_t timeout = 0;
     while ((SC_REG & 0x80) && timeout < 30000) {
@@ -145,17 +207,10 @@ uint8_t link_send(uint8_t data) {
     }
     
     if (timeout >= 30000) {
-        add_log("! TX TIMEOUT");
         return 0x00;
     }
     
-    uint8_t received = SB_REG;
-    
-    if (received != 0x00 && received != 0xFF) {
-        last_received = received;
-    }
-    
-    return received;
+    return SB_REG;
 }
 
 uint8_t link_poll(void) {
@@ -168,7 +223,6 @@ uint8_t link_poll(void) {
         if (timeout < 30000) {
             uint8_t received = SB_REG;
             if (received != 0x00 && received != 0xFF) {
-                last_received = received;
                 return received;
             }
         }
@@ -178,51 +232,101 @@ uint8_t link_poll(void) {
 
 // ===== PROCESAR MENSAJES =====
 void process_message(uint8_t msg) {
-    char buf[21];
+    last_received = msg;
+    no_response_counter = 0;
     
     switch (msg) {
         case MSG_DISCOVERY:
-            add_log("< DISCOVERY");
+            add_log("RX DISCOVERY");
             connected = 1;
             delay(50);
+            last_sent = MSG_ACK;
             link_send(MSG_ACK);
-            add_log("> ACK");
+            add_log("TX ACK");
             break;
             
         case MSG_ACK:
-            add_log("< ACK");
+            add_log("RX ACK");
             connected = 1;
             break;
             
         case MSG_BUTTON_A:
-            add_log("< Button A");
+            add_log("RX Button A");
+            last_button_rx = MSG_BUTTON_A;
             connected = 1;
             break;
             
         case MSG_BUTTON_B:
-            add_log("< Button B");
+            add_log("RX Button B");
+            last_button_rx = MSG_BUTTON_B;
+            connected = 1;
+            break;
+            
+        case MSG_BUTTON_UP:
+            add_log("RX Button UP");
+            last_button_rx = MSG_BUTTON_UP;
+            connected = 1;
+            break;
+            
+        case MSG_BUTTON_DOWN:
+            add_log("RX Button DOWN");
+            last_button_rx = MSG_BUTTON_DOWN;
+            connected = 1;
+            break;
+            
+        case MSG_BUTTON_LEFT:
+            add_log("RX Button LEFT");
+            last_button_rx = MSG_BUTTON_LEFT;
+            connected = 1;
+            break;
+            
+        case MSG_BUTTON_RIGHT:
+            add_log("RX Button RIGHT");
+            last_button_rx = MSG_BUTTON_RIGHT;
+            connected = 1;
+            break;
+            
+        case MSG_BUTTON_SELECT:
+            add_log("RX Button SELECT");
+            last_button_rx = MSG_BUTTON_SELECT;
             connected = 1;
             break;
             
         case MSG_PING:
-            add_log("< PING");
+            add_log("RX PING");
+            last_sent = MSG_PONG;
             link_send(MSG_PONG);
-            add_log("> PONG");
+            add_log("TX PONG");
             connected = 1;
             break;
             
         case MSG_PONG:
-            add_log("< PONG");
+            add_log("RX PONG");
             connected = 1;
             break;
             
         default:
-            if (msg != 0x00 && msg != 0xFF) {
-                sprintf(buf, "< 0x%02X", msg);
-                add_log(buf);
-                connected = 1;
-            }
+            add_log("RX UNKNOWN");
+            connected = 1;
             break;
+    }
+    
+    update_header();
+}
+
+// ===== ENVIAR BOTÓN =====
+void send_button(uint8_t button_code, const char* button_name) {
+    char log_msg[21];
+    sprintf(log_msg, "TX Button %s", button_name);
+    add_log(log_msg);
+    
+    last_sent = button_code;
+    last_button_tx = button_code;
+    uint8_t response = link_send(button_code);
+    update_header();
+    
+    if (response != 0x00 && response != 0xFF) {
+        process_message(response);
     }
 }
 
@@ -231,16 +335,15 @@ void main_loop(void) {
     uint8_t response;
     uint8_t joy_prev = 0;
     uint8_t joy_cur = 0;
-    uint16_t idle_counter = 0;
+    uint16_t discovery_counter = 0;
+    uint8_t button_pressed = 0;
+    uint16_t start_lock = 0;
     
     init_screen();
-    add_log("* SERVIDOR");
-    add_log("* Esperando...");
+    add_log("SERVER INIT");
+    add_log("Searching...");
     
-    // Discovery inicial
-    delay(500);
-    link_send(MSG_DISCOVERY);
-    add_log("> DISCOVERY");
+    in_main_screen = 1;
     
     while (1) {
         wait_vbl_done();
@@ -248,89 +351,133 @@ void main_loop(void) {
         joy_prev = joy_cur;
         joy_cur = joypad();
         
-        // Botón A
-        if ((joy_cur & J_A) && !(joy_prev & J_A)) {
-            add_log("> Button A");
-            response = link_send(MSG_BUTTON_A);
-            if (response != 0x00 && response != 0xFF) {
-                process_message(response);
-            }
-            update_header();
-            delay(200);
-        }
+        button_pressed = 0;
         
-        // Botón B
-        if ((joy_cur & J_B) && !(joy_prev & J_B)) {
-            add_log("> Button B");
-            response = link_send(MSG_BUTTON_B);
-            if (response != 0x00 && response != 0xFF) {
-                process_message(response);
-            }
-            update_header();
-            delay(200);
-        }
-        
-        // SELECT: Ping manual
-        if ((joy_cur & J_SELECT) && !(joy_prev & J_SELECT)) {
-            add_log("> PING");
-            response = link_send(MSG_PING);
-            if (response != 0x00 && response != 0xFF) {
-                process_message(response);
-            }
-            update_header();
-            delay(200);
-        }
-        
-        // START: Reiniciar
-        if ((joy_cur & J_START) && !(joy_prev & J_START)) {
+        // START: Volver a título (con lock de 2 segundos)
+        if ((joy_cur & J_START) && !(joy_prev & J_START) && start_lock == 0) {
             connected = 0;
             last_sent = 0x00;
             last_received = 0x00;
+            last_button_tx = 0;
+            last_button_rx = 0;
+            in_main_screen = 0;
+            
+            show_title_screen();
+            
+            // Reiniciar todo
             init_link();
             init_screen();
-            add_log("* REINICIADO");
-            delay(300);
+            add_log("RESTARTED");
+            start_lock = 120; // Lock de 2 segundos (120 frames)
             continue;
         }
         
-        // Polling pasivo
-        response = link_poll();
-        if (response != 0x00 && response != 0xFF) {
-            process_message(response);
-            update_header();
+        // Decrementar lock
+        if (start_lock > 0) {
+            start_lock--;
         }
         
-        // Auto-discovery cada 5 segundos si no conectado
-        if (!connected) {
-            idle_counter++;
-            if (idle_counter > 300) {  // ~5 segundos a 60fps
-                add_log("> DISCOVERY");
-                link_send(MSG_DISCOVERY);
-                idle_counter = 0;
+        // Botones
+        if ((joy_cur & J_A) && !(joy_prev & J_A)) {
+            send_button(MSG_BUTTON_A, "A");
+            button_pressed = 1;
+            delay(150);
+        }
+        
+        if ((joy_cur & J_B) && !(joy_prev & J_B)) {
+            send_button(MSG_BUTTON_B, "B");
+            button_pressed = 1;
+            delay(150);
+        }
+        
+        if ((joy_cur & J_UP) && !(joy_prev & J_UP)) {
+            send_button(MSG_BUTTON_UP, "UP");
+            button_pressed = 1;
+            delay(150);
+        }
+        
+        if ((joy_cur & J_DOWN) && !(joy_prev & J_DOWN)) {
+            send_button(MSG_BUTTON_DOWN, "DOWN");
+            button_pressed = 1;
+            delay(150);
+        }
+        
+        if ((joy_cur & J_LEFT) && !(joy_prev & J_LEFT)) {
+            send_button(MSG_BUTTON_LEFT, "LEFT");
+            button_pressed = 1;
+            delay(150);
+        }
+        
+        if ((joy_cur & J_RIGHT) && !(joy_prev & J_RIGHT)) {
+            send_button(MSG_BUTTON_RIGHT, "RIGHT");
+            button_pressed = 1;
+            delay(150);
+        }
+        
+        if ((joy_cur & J_SELECT) && !(joy_prev & J_SELECT)) {
+            send_button(MSG_BUTTON_SELECT, "SELECT");
+            button_pressed = 1;
+            delay(150);
+        }
+        
+        // Polling pasivo
+        if (!button_pressed) {
+            response = link_poll();
+            if (response != 0x00 && response != 0xFF) {
+                process_message(response);
             }
         }
         
-        // Ping automático cada 10 segundos si conectado
+        // Auto-discovery
+        if (!connected) {
+            discovery_counter++;
+            if (discovery_counter > 180) {
+                add_log("TX DISCOVERY");
+                last_sent = MSG_DISCOVERY;
+                response = link_send(MSG_DISCOVERY);
+                update_header();
+                
+                if (response != 0x00 && response != 0xFF) {
+                    process_message(response);
+                }
+                
+                discovery_counter = 0;
+            }
+        } else {
+            discovery_counter = 0;
+        }
+        
+        // Ping automático
         if (connected) {
             ping_counter++;
-            if (ping_counter > 600) {  // ~10 segundos
-                add_log("> PING (auto)");
+            if (ping_counter > 300) {
+                add_log("TX PING auto");
+                last_sent = MSG_PING;
                 response = link_send(MSG_PING);
+                update_header();
+                
                 if (response == 0x00 || response == 0xFF) {
-                    // No hay respuesta, posible desconexión
-                    connected = 0;
-                    add_log("! TIMEOUT");
+                    no_response_counter++;
+                    add_log("No response");
+                    
+                    if (no_response_counter >= 3) {
+                        connected = 0;
+                        add_log("DISCONNECTED");
+                        update_header();
+                        no_response_counter = 0;
+                    }
                 } else {
                     process_message(response);
                 }
-                update_header();
+                
                 ping_counter = 0;
             }
         } else {
             ping_counter = 0;
+            no_response_counter = 0;
         }
         
-        // Actualizar header cada segundo
+        // Actualizar header
         static uint8_t refresh_counter = 0;
         refresh_counter++;
         if (refresh_counter > 60) {
@@ -345,6 +492,7 @@ void main(void) {
     DISPLAY_ON;
     SHOW_BKG;
     
+    show_title_screen();
     init_link();
     main_loop();
 }
