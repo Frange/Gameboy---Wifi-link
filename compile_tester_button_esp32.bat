@@ -1,0 +1,1 @@
+/gbdk/bin/lcc -o tester_button_esp32.gb tester_button_esp32.c
