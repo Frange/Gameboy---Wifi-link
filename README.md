@@ -25,6 +25,7 @@ This project replaces the Game Link cable with a wireless bridge: each Game Boy 
 - 1 × **Bi-directional Level Shifter** (5 V ↔ 3.3 V)  
 - Standard wiring for **SI / SO / SCK / GND** lines
 
+### Images
   ![GB Mainboard - Gamelink](GB_mainboard.jpg)
   ![ESP32](ESP32.jpg)
   ![Level shifter](Level_shifter.jpg)
