@@ -194,7 +194,7 @@ void add_log(const char* msg) {
 // ===== LINK CABLE =====
 void init_link(void) {
     SB_REG = 0x00;
-    SC_REG = 0x80;
+    SC_REG = 0x00; // Esclavo
 }
 
 uint8_t link_send(uint8_t data) {
